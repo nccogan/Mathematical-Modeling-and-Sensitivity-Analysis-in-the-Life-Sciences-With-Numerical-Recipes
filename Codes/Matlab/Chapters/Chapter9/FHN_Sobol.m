@@ -1,0 +1,316 @@
+%========================================
+% Created on Tue Oct 26 11:34:10 2021
+% FHN model: Sobol' and frozen comparison
+% @author: cogan
+%========================================
+
+clear
+close all
+set(groot,'DefaultAxesTickLabelInterpreter','latex');
+set(groot,'DefaultLegendInterpreter','latex');
+
+
+params_list=['$\epsilon$', '$A$', '$\alpha$', '$w_0$', '$\gamma$'];
+%========================================
+%Change IC to show excitability
+%========================================
+
+params=[.01, 1, .1, 0, .5];
+V0=.1;
+w0=0;
+tspan = linspace(0, 4, 500);
+[t1,y_solution1]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[.1,w0]); 
+[t2,y_solution2]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[.2,w0]); 
+
+plot(t1,y_solution1(:,1),'b','LineWidth',2)
+hold on
+plot(t2,y_solution2(:,1),'m','LineWidth',2)
+legend('$V_0=.1$','$V_0=.2$')
+xlabel('Time', fontsize=16)
+ylabel('Voltage', fontsize=16)
+%========================================
+%Change applied current to show tonic
+%========================================
+figure
+params=[.01, 1, .1, -1, .5];
+V0=.1;
+w0=0;
+tspan = linspace(0, 4, 500);
+[t1,y_solution1]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[.1,w0]); 
+plot(t1,y_solution1(:,1),'b','LineWidth',2)
+xlabel('Time', fontsize=16)
+ylabel('Voltage', fontsize=16)
+% =============================================================================
+% sensitivity section
+% =============================================================================
+% =============================================================================
+% First set-up simulate data
+% =============================================================================
+params=[.01, 1, .1, -1, .5];
+V0=.1;
+w0=0;
+tspan = linspace(0, 20, 500);
+[t1,y_solution1]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[V0,w0]); 
+t_data=t1;
+y_data=y_solution1(:,1)+.1*(2.*rand(length(y_solution1(:,1)),1)-1);
+figure
+plot(t_data,y_data,'o','MarkerSize',10)
+hold on
+plot(t1,y_solution1(:,1),'LineWidth',2)
+legend(['True', 'With Noise'])
+xlabel('Time', fontsize=16)
+ylabel('Voltage', fontsize=16)
+
+
+
+% =============================================================================
+% First CODES requires simple input/output structure. We define a new
+% function SA =QoI(params). The first example gives the maximum value 
+% of the voltage for a given set of parameters, initial conditions and
+% time-span
+% =============================================================================
+
+Test=QoI(params,t_data,y_data) 
+
+dim=14;
+n=1e5;
+%%Sobol_out=CODES.sensitivity.sobol(@(params1) QoI(params1),dim,n,'bar_plot',true,'conv_seq',linspace(100,n,20));
+%%Sobol_out.S1 %gives a table with indices
+
+
+% =============================================================================
+% Sobol' sensitivity using codes after the style of Ralph Smith
+% =============================================================================
+
+%
+% Computes the Sobol' indices for the scalar QoI
+%
+params_length = length(params);
+Ns = 5e3;
+
+for i = 1 : params_length
+   fprintf('param %i analysis \n', i);
+   [Xi F1, F2, mu, D, Stot(i)] = get_sobol_scalar(@QoI, params_length, Ns, i, params,t_data,y_data);
+end
+
+close all;
+figure(1);
+param_labels = {'$\epsilon$', '$A$', '$\alpha$', '$w_0$', '$\gamma$'};
+bar(Stot);
+set(gca,'fontsize', 20, 'xticklabels', param_labels); 
+xlim([0 length(params)])
+ylim([0 1])
+ylabel('total Sobol index')
+
+% =============================================================================
+% compare with varying parameters to compare variations in output. 
+% One could be more precise by sampling over reduced parameter space.
+% =============================================================================
+params=[.01, 1, .1, -1, .5];
+V0=.1;
+w0=0;
+tspan = linspace(0, 10, 500);
+[t_true,y_solution_true]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[V0,w0]); 
+
+
+params=[.01, 1, 1, -1, .5];
+V0=.1;
+w0=0;
+[t_alpha,y_solution_alpha]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[V0,w0]); 
+
+params=[.1, 1, .1, -1, .5];
+V0=.1;
+w0=0;
+[t_eps,y_solution_eps]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[V0,w0]); 
+
+params=[.01, 1, .1, -1.5, .5];
+V0=.1;
+w0=0;
+[t_w,y_solution_w]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[V0,w0]); 
+
+
+plot(t_true,y_solution_true(:,1),'b','LineWidth',2)
+hold on
+plot(t_alpha,y_solution_alpha(:,1),'k','LineWidth',2)
+legend('True', '$\alpha=.5$',fontsize=16)
+xlabel('Time', fontsize=16)
+ylabel('Voltage', fontsize=16)
+
+figure
+
+plot(t_true,y_solution_true(:,1),'b','LineWidth',2)
+hold on
+plot(t_eps,y_solution_eps(:,1),'k','LineWidth',2)
+legend('True', '$\epsilon=.1$',fontsize=16)
+xlabel('Time', fontsize=16)
+ylabel('Voltage', fontsize=16)
+
+figure
+plot(t_true,y_solution_true(:,1),'b','LineWidth',2)
+hold on
+plot(t_w,y_solution_w(:,1),'k','LineWidth',2)
+legend('True', 'w=-1.5',fontsize=16)
+xlabel('Time', fontsize=16)
+ylabel('Voltage', fontsize=16)
+
+%================================================================
+% Define the QoI function Sobol'
+%================================================================
+function SA = QoI(params,t_data,y_data)
+    tspan = linspace(0, 20, 500);
+    V0=.1;
+    w0=0;
+ %====================
+     [t,y_solution]=ode45(@(t,Y) rhs(t,Y,params), [tspan(1),tspan(end)],[V0,w0]); 
+     y_data_interp=interp1(t_data,y_data,t);
+     SA = norm(y_solution(:,1)-y_data_interp);
+end
+
+
+%================================================================
+%Beginning of Scalar Sobol' function
+%================================================================
+
+function [Xi F1, F2, mu sigma2 Sy_tot Sy] = get_sobol_scalar(F, ndim, Ns, yidx, params1,t_data,y_data)
+%
+%  F    : function handle to simulation routine
+%         the goal is to assess sensitivity of F(x_1, ..., x_ndim) to parameters, x_1, ..., x_ndim
+%
+%  parameter : stochastic dimension 
+%
+%  Ns   : the number of samples used to estimate the sensitivity indices
+%
+%  yidx : the index set for which we want to compute the index,
+%
+%         example yidx = [1 2] gives S_12, yidx = [2] gives S_2, etc.
+%         the following is formulated following the paper of Sobol ...
+% 
+% reference: 
+%   Sobol, I.M., Global sensitivity indices for nonlinear mathematical models and their Monte Carlo estimates, 
+%   Mathematics and Computers in Simulation, 2001.
+
+m = length(yidx);
+p = ndim - m;
+
+% get the basic samples needed
+eta        = 2*rand(Ns, m)-1;
+etaprime   = 2*rand(Ns, m)-1;
+zeta       = 2*rand(Ns, p)-1;
+zetaprime  = 2*rand(Ns, p)-1;
+
+% index sets
+I = [1 : ndim];     
+idx = setdiff(I, yidx);
+
+% set up the samples
+Xi1 = zeros(Ns, ndim);
+Xi2 = zeros(Ns, ndim);
+Xi3 = zeros(Ns, ndim);
+
+Xi1(:, yidx) = eta;
+Xi1(:, idx)  = zeta;
+
+Xi2(:, yidx)   = eta;
+Xi2(:, idx) = zetaprime;
+
+Xi3(:, yidx)   = etaprime;
+Xi3(:, idx) = zeta;
+
+
+% get the needed function evaluations 
+F1 = zeros(Ns, 1);
+F2 = zeros(Ns, 1);
+F3 = zeros(Ns, 1);
+% the sampling loop
+for k = 1 : Ns
+   ratio = (k/Ns)*100;
+       if mod(ratio, 5)<1e-13
+           if ratio == 5
+              fprintf('[');
+           end
+       fprintf('%g%% ', ratio);
+           if ratio == 100
+              fprintf(']\n');
+           end
+        end
+
+%Note that this code is set-up so that Xi1 provides an index to parameters
+%we need to scale these to true parameter ranges. 
+% In the original code, this is done in the ODEsolver
+% To maintain the structure here I am sacrificing some 
+%efficiency 
+    meanpar=params1;
+    a = meanpar - 0.2 * meanpar;
+    b = meanpar + 0.2 * meanpar;
+    paramsi1  = 0.5 * (a + b) + 0.5 * (b - a) .* Xi1(k, :);
+    paramsi2  = 0.5 * (a + b) + 0.5 * (b - a) .* Xi2(k, :);
+    paramsi3  = 0.5 * (a + b) + 0.5 * (b - a) .* Xi3(k, :);
+
+   F1(k,:) = F(paramsi1,t_data,y_data);
+   F2(k,:) = F(paramsi2,t_data,y_data);
+   F3(k,:) = F(paramsi3,t_data,y_data);
+end
+
+% Compute the estimators
+phi  = F1;
+phi2 = F1.^2;
+psi  = phi .* F2;
+chi  = 0.5 * (phi - F3).^2;
+
+% compute the results
+mu      = mean(phi);
+mu2     = mean(phi2);
+sigma2  = mu2 - mu.^2;
+mupsi   = mean(psi);
+Sy      = (mupsi - mu.^2) ./ sigma2;
+Sy_tot  = mean(chi) ./ sigma2;
+
+Xi = Xi1;
+
+mu     = mu(:);
+sigma2 = sigma2(:);
+Sy     = Sy(:);
+Sy_tot = Sy_tot(:);
+end
+
+%================================================================
+%End of Scalar Sobol' function
+%================================================================
+
+
+%=======================================
+% RHS functions
+%=======================================
+
+
+function f1=rhs_V(t,Y,params)
+    V=Y(1);
+    w=Y(2);
+    epsilon=params(1);
+    A=params(2);
+    alpha=params(3);
+    w0=params(4);
+    gamma=params(5);
+    f1= 1/epsilon*(A*V*(V-alpha)*(1-V)-w-w0);
+end
+
+function f2=rhs_w(t,Y,params)
+    V=Y(1);
+    w=Y(2);
+    epsilon=params(1);
+    A=params(2);
+    alpha=params(3);
+    w0=params(4);
+    gamma=params(5);
+   f2=(V-gamma*w);
+end
+function g=rhs(t,Y,params)
+    V=Y(1);
+    w=Y(2);
+    epsilon=params(1);
+    A=params(2);
+    alpha=params(3);
+    w0=params(4);
+    gamma=params(5);
+   g = [rhs_V(t,Y,params);rhs_w(t,Y,params)];
+end

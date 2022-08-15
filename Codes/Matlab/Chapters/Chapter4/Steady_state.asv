@@ -1,0 +1,58 @@
+clear
+close all
+params=[.2,.1,.2,.1];
+%plot contours
+ [XX,YY]=meshgrid([-2:.1:2],[-2:.1:2]);
+ [m,n]=size(XX);
+ for i=1:m
+     for j=1:n
+         A(i,j)=rhs([XX(i,j),YY(i,j)],params);
+     end
+ end
+ 
+ 
+ A=rhs(YY,params)
+ %%contour(X,Y,@(Y)rhs(Y,params),[-.0001,.0001],'k')
+% hold
+% contour(X,Y,Z_g,[-.0001,.0001],'r')
+%====================================
+%find Steady-States
+%====================================
+y0=[10,.1];
+solution1 = fsolve(@(Y)rhs(Y,params), [10,.1])
+
+
+
+%====================================
+%Define the right hand side functions
+%=====================================
+function f=rhs_x(Y,params)
+alpha=params(1);
+beta=params(2);
+delta=params(3);
+gamma=params(4);
+x=Y(1);
+y=Y(2);
+f=alpha.*x.*y-delta*x;
+end
+
+function g=rhs_y(Y,params)
+alpha=params(1);
+beta=params(2);
+delta=params(3);
+gamma=params(4);
+x=Y(1);
+y=Y(2);
+g =-beta.*x.*y+gamma*y;
+end
+
+function k=rhs(Y,params)
+alpha=params(1);
+beta=params(2);
+delta=params(3);
+gamma=params(4);
+x=Y(1);
+y=Y(2);
+k = [rhs_x(Y,params),rhs_y(Y,params)];
+end
+
