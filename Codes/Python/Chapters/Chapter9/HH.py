@@ -87,7 +87,7 @@ pyplot.savefig('HH_compare.png')
 # =============================================================================
 
 from SALib.analyze import sobol
-from SALib.sample.morris import sample
+from SALib.sample.saltelli import sample
 
 params=[2.000, .1, 4,.07,1,0.01,.125,36, 120, .3,-12, 115,10.6,10]
 V0=1
@@ -104,7 +104,7 @@ for i in np.arange(len(params)):
     b[i,:]=[.95*params[i],1.05*params[i]]
 b.sort(axis=1) # sort the rows that are negative    
 problem = {
-  'num_vars': 13,
+  'num_vars': 14,
   'names': [ r'$C_m$', r'${\alpha_m}_0$', r'${\beta_m}_0$', r'${\alpha_h}_0$', r'${\beta_h}_0$', r'${\alpha_n}_0$', r'${\beta_n}_0$',r'$g_K$',r'$g_{Na}$', r'$g_l$', r'$V_k$', r'$V_{Na}$', r'$V_l$', r'$I_{app}$'],
   'groups': None,
   'bounds': b
@@ -113,8 +113,7 @@ problem = {
 # param_file = '../../src/SALib/test_functions/params/Ishigami_groups.txt'
 
 # Generate samples
-param_values = sample(problem, N=900, num_levels=4,
-                      optimal_trajectories=None)
+param_values = sample(problem, N=2^10)
 
 # =============================================================================
 # Run the model
